@@ -1,0 +1,130 @@
+{
+   "parameters" : {
+      "adminUserName" : {
+         "type" : "string",
+         "defaultValue" : "admin"
+      },
+      "adminPassword" : {
+         "type" : "string",
+         "defaultValue" : "****"
+      },
+      "vmName" : {
+         "defaultValue" : "mytemplatedVM",
+         "type" : "string"
+      },
+      "vmSize" : {
+         "type" : "string",
+         "defaultValue" : "Standard_DS1"
+      },
+      "vnetName": {
+        "type": "string",
+        "defaultValue" : "we-vnet"
+      },
+      "subnetName": {
+        "type": "string",
+        "defaultValue" : "MainSubnet"
+      }
+   },
+   "$schema" : "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+   "variables" : {
+      "diagAccount" : "diagwestore",
+      "vnetID" : "[resourceId('Microsoft.Network/virtualNetworks', parameters('vnetName'))]",
+      "subnetRef": "[concat(variables('vnetID'),'/subnets/', parameters('subnetName'))]",
+      "dataDskName" : "[concat(parameters('vmName'), '-data1-dsk')]",
+      "nicName" : "[concat(parameters('vmName'), '-nic')]"
+   },
+   "resources" : [
+      {
+         "type" : "Microsoft.Network/networkInterfaces",
+         "apiVersion" : "2017-06-01",
+         "location" : "[resourceGroup().location]",
+         "name" : "[variables('nicName')]",
+         "properties" : {
+            "ipConfigurations" : [
+               {
+                  "properties" : {
+                     "privateIPAllocationMethod" : "Dynamic",
+                     "subnet" : {
+                        "id" : "[variables('subnetRef')]"
+                     }
+                  },
+                  "name" : "ipconfig1"
+               }
+            ]
+         }
+      },
+      {
+         "type" : "Microsoft.Compute/disks",
+         "apiVersion" : "2016-04-30-preview",
+         "name" : "[variables('dataDskName')]",
+         "location" : "[resourceGroup().location]",
+         "properties" : {
+            "creationData" : {
+               "createOption" : "Empty"
+            },
+            "accountType" : "Standard_LRS",
+            "diskSizeGB" : 100
+         }
+      },
+      {
+         "apiVersion" : "2017-03-30",
+         "dependsOn" : [
+            "[resourceId('Microsoft.Compute/disks', variables('dataDskName'))]",
+            "[resourceId('Microsoft.Network/networkInterfaces', variables('nicName'))]"
+         ],
+         "type" : "Microsoft.Compute/virtualMachines",
+         "name" : "[parameters('vmName')]",
+         "location" : "[resourceGroup().location]",
+         "properties" : {
+            "storageProfile" : {
+               "imageReference" : {
+                  "id" : "/subscriptions/x/resourceGroups/default/providers/Microsoft.Compute/images/RHEL7.3-we-img"
+               },
+               "osDisk" : {
+                  "createOption" : "fromImage"
+               },
+               "dataDisks" : [
+                  {
+                     "lun" : 0,
+                     "managedDisk" : {
+                        "storageAccountType" : "Standard_LRS",
+                        "id" : "[resourceId('Microsoft.Compute/disks/', variables('dataDskName'))]"
+                     },
+                     "createOption" : "attach",
+                     "diskSizeGB" : "100",
+                     "name" : "[variables('dataDskName')]"
+                  }
+               ]
+            },
+            "networkProfile" : {
+               "networkInterfaces" : [
+                  {
+                     "properties" : {
+                        "id" : "[resourceId('Microsoft.Network/networkInterfaces', variables('nicName'))]"
+                     }
+                  }
+               ]
+            },
+            "hardwareProfile" : {
+               "vmSize" : "[parameters('vmSize')]"
+            },
+            "osProfile" : {
+               "computerName" : "[parameters('vmName')]",
+               "linuxConfiguration" : {
+                  "disablePasswordAuthentication" : false
+               },
+               "adminUsername" : "[parameters('adminUserName')]",
+               "adminPassword" : "[parameters('adminPassword')]"
+            },
+            "diagnosticsProfile" : {
+               "bootDiagnostics" : {
+                  "storageUri" : "https://diagwestore.blob.core.windows.net/",
+                  "enabled" : true
+               }
+            }
+         }
+      }
+   ],
+   "contentVersion" : "1.0.0",
+   "outputs" : {}
+}
